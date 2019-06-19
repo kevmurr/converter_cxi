@@ -32,11 +32,16 @@ energy=target_dict[targetnam]*1000*sc.e
 scan_name="Scan_{}".format(scanno)
 
 #Paths
+
 logdir = "/gpfs/cfel/cxi/labs/MLL-Sigray/scan-logs/"
-scanssdir = "/gpfs/cfel/cxi/labs/MLL-Sigray/Scans/"
-savedir=""
-#savedir= "/gpfs/cfel/cxi/labs/MLL-Sigray/Processed/{0}/".format(year)
+#logdir="Log/"
+scanssdir = "/gpfs/cfel/cxi/labs/MLL-Sigray/scan-frames/"
+#scanssdir="Data/"
+#savedir="output/"
+savedir= "/gpfs/cfel/cxi/labs/MLL-Sigray/Processed/{0}/".format(year)
 mask="/gpfs/cfel/cxi/labs/MLL-Sigray/mask/lambda_mask1.h5"
+#mask="lambda_mask1.h5"
+
 maskpath="/data"
 
 #Old permanent config things
@@ -48,6 +53,13 @@ unitvector_f=np.array((-1,0,0))
 unitvector_s=np.array((0,-1,0))
 
 
+unit_dict={
+" m\n":1,
+"mm\n":10**-3,
+"µm\n":10**-6,
+"nm\n":10**-9,
+"pm\n":10**-12,
+}
 
 
 #Load mask
@@ -58,22 +70,33 @@ mask=maskfile[maskpath][()].astype(np.int)
 lognam="{0}{1}.log".format(logdir,scan_name)
 logfile=open(lognam,"r")
 scanmotor=None
+i=0
 for line in logfile:
-    if line.beginswith("# Points count"):
+    if line.startswith("# Points count"):
         N_points=int(line.split(":")[1])
-    if line.beginswith("# Device:") and line.endswith("Scanner")==False and line.endswith("Lambda")==False:
+        positions = np.zeros((N_points)).astype("float")
+    if line.startswith("# Device:") and line.endswith("Scanner")==False and line.endswith("Lambda\n")==False:
         scanmotor=str(line.split(":")[1][1:])
+    if line.startswith("#")==False:
+        current_entry=line.split(";")[2]
+        if i==0:
+            unit=current_entry[-3:]
+            print(unit)
+        unit_scaling=float(unit_dict[unit])
+        current_pos=float(current_entry[:-3])*unit_scaling
+        positions[i]=current_pos
+        i+=1
 if scanmotor==None:
     print("WARNING: No proper scanmotor detected!")
 else:
     print("Scanmotor is {}".format(scanmotor))
 
-if scanmotor=="SAMX":
+if scanmotor=="X-SAM\n":
     orientation="h"
-elif scanmotor=="SAMY":
+elif scanmotor=="Y-SAM\n":
     orientation="v"
 else:
-    print("Scanmotor is not SAMX or SAMY. Don't know orientation. Assuming h.")
+    print("Scanmotor is not X-SAM or Y-SAM. Don't know orientation. Assuming h.")
     orientation="h"
 
 
@@ -92,12 +115,15 @@ if N_points!=len(files):
     print("WARNING! Number of expected files does not match number of detected files.")
 useframes=np.ones((N_points)).astype(np.bool)
 startframe=0
+frames_arr=np.arange(0,N_points,1)
 for i in range(0,N_points):
     try:
         if i==startframe:
-            example_f=h5.File(ldir+"/"+files[i],"r")
+            file_now="/{0}_".format(scan_name)+"{:05.0f}_Lambda.nxs".format(i)
+            example_f=h5.File(ldir+"/"+file_now,"r")
             example_data=example_f["/entry/instrument/detector/data"][0,:,:]
-            if np.sum(example_data)==0:
+            print(np.sum(example_data))
+            if np.sum(example_data)<10:
                 startframe+=1
                 print("First frame was only zeros")
                 useframes[i]=False
@@ -108,7 +134,8 @@ for i in range(0,N_points):
                 print("Startframe is {0}. Creating full data array.".format(i))
                 data_full=np.zeros((N_points,example_data.shape[0],example_data.shape[1]))
         else:
-            f_now=h5.File(ldir+"/"+files[i],"r")
+            file_now = "/{0}_".format(scan_name) + "{:05.0f}_Lambda.nxs".format(i)
+            f_now=h5.File(ldir+"/"+file_now,"r")
             if orientation=="h":
                 data_now=np.sum(f_now["/entry/instrument/detector/data"][0,roi[0]:roi[1],:],axis=0)
                 data_now[(db_coord[1]-int(dbeam_cut_range/2)):(db_coord[1]+int(dbeam_cut_range/2))]=np.zeros_like(data_now[(db_coord[1]-int(dbeam_cut_range/2)):(db_coord[1]+int(dbeam_cut_range/2))])
@@ -125,7 +152,7 @@ for i in range(0,N_points):
     except (KeyError,OSError):
         if i==startframe:
             startframe+=1
-        print("Didnt find file {0} or proper data in file.".format(ldir+"/"+files[i]))
+        print("Didnt find file {} or proper data in file.".format(file_now))
         useframes[i]=False
 
 #writing the cxifile
@@ -154,26 +181,6 @@ print("Making wavelength")
 wavelength=(sc.h*sc.c)/energy
 print("Wavelength is %s m" %wavelength)
 
-unit_dict={
-" m":1,
-"mm":10**-3,
-"µm":10**-6,
-"nm":10**-9,
-"pm":10**-12,
-}
-
-#Now import the positions
-translation_file=logfile
-i=0
-positions=np.zeros((N_points)).astype("float")
-for line in translation_file and line.beginswith("#")==False:
-    current_entry=line.split(";")[2]
-    if i==0:
-        unit=current_entry[-2:]
-    unit_scaling=float(unit_dict[unit])
-    current_pos=float(current_entry[:-2])*unit_scaling
-    positions[i]=current_pos
-    i+=1
 
 translation_vec=np.zeros((N_points,3))
 if orientation=="v":
@@ -187,11 +194,12 @@ print("Makint powder array...")
 powderarr=np.ones((data_full.shape[1],data_full.shape[2]))
 powderarr=np.sum(data_full[useframes],axis=0)
 print("Making good frames array...")
-good_frames_arr=np.arange(0,N_points,1)
+good_frames_arr=np.arange(0,translation_vec.shape[0],1)
 x_pixel_cxi=detector_1.create_dataset("x_pixel_size",data=pxsize_x)
 y_pixel_cxi=detector_1.create_dataset("y_pixel_size",data=pxsize_y)
 source_1=instrument_1.create_group("source_1")
 wavelength_cxi=source_1.create_dataset("wavelength",data=wavelength)
+db_coordinate=source_1.create_dataset("direct_beam_coordinate",data=db_coord)
 energy_cxi=source_1.create_dataset("energy",data=energy)
 sample_2=entry_1.create_group("sample_2")
 sample_3=entry_1.create_group("sample_3")
@@ -200,7 +208,7 @@ translation=geometry.create_dataset("translation",data=translation_vec)
 make_whitefield=cxifile.create_group("make_whitefield")
 whitefield=make_whitefield.create_dataset("whitefield",data=powderarr)
 frame_selector=cxifile.create_group("frame_selector")
-good_frames=frame_selector.create_dataset("good_frames",data=good_frames_arr[useframes])
+good_frames=frame_selector.create_dataset("good_frames",data=good_frames_arr)
 mask=mask.astype("bool")
 mask_maker=cxifile.create_group("mask_maker")
 mask_cxi_3=mask_maker.create_dataset("mask",data=mask)
