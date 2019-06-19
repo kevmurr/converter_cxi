@@ -16,10 +16,9 @@ year="2019"
 
 
 #input arguments
-print("Arguments should be 1: scan number, 2: target (Mo/Cu/Rh), 3: detector distance in meters")
-scanno=sys.argv[1]
-targetnam=str(sys.argv[2])
-detector_dist=float(sys.argv[3])
+scanno=int(input("Please enter the scan number (e.g. 10):"))
+targetnam=str(input("Please enter the target (Mo, Cu or Rh):"))
+detector_dist=float(input("Please enter the detector distance in meters(e.g. 0.3):"))
 print("All arguments are set.")
 
 #Process input arguments
