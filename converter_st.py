@@ -11,9 +11,9 @@ import h5py as h5
 import scipy.constants as sc
 #Additional parameters
 dbeam_cut_range=10
-roi_size=10
+roi_size=20
 year="2019"
-
+manual_db=None
 
 #input arguments
 scanno=int(input("Please enter the scan number (e.g. 10):"))
@@ -50,7 +50,7 @@ pxsize_z=0
 unit_scanmotor=10**-3
 unitvector_f=np.array((-1,0,0))
 unitvector_s=np.array((0,-1,0))
-
+db_coord=manual_db
 
 unit_dict={
 " m\n":1,
@@ -127,22 +127,28 @@ for i in range(0,N_points):
                 print("First frame was only zeros")
                 useframes[i]=False
             else:
-                db_coord=np.unravel_index(np.argmax(np.multiply(mask,example_data)),example_data.shape)
+                if db_coord==None:
+                    db_coord=np.unravel_index(np.argmax(np.multiply(mask,example_data)),example_data.shape)
                 print("Direct beam pixel coordinate is {0}.".format(db_coord))
                 roi=(db_coord[0]-int(roi_size/2),db_coord[0]+int(roi_size/2),db_coord[1]-int(roi_size/2),db_coord[1]+int(roi_size/2))
                 print("Startframe is {0}. Creating full data array.".format(i))
                 data_full=np.zeros((N_points,example_data.shape[0],example_data.shape[1]))
+                raw_frames=np.zeros_like(data_full)
         else:
             file_now = "/{0}_".format(scan_name) + "{:05.0f}_Lambda.nxs".format(i)
             f_now=h5.File(ldir+"/"+file_now,"r")
             if orientation=="h":
                 data_now=np.sum(f_now["/entry/instrument/detector/data"][0,roi[0]:roi[1],:],axis=0)
+                frame_now=f_now["/entry/instrument/detector/data"][0,:,:]
+                raw_frames[i,:,:]=frame_now
                 data_now[(db_coord[1]-int(dbeam_cut_range/2)):(db_coord[1]+int(dbeam_cut_range/2))]=np.zeros_like(data_now[(db_coord[1]-int(dbeam_cut_range/2)):(db_coord[1]+int(dbeam_cut_range/2))])
                 data_insert = np.zeros_like(example_data)
                 for i1 in range(0,data_insert.shape[0],1):
                     data_insert[i1,:]=data_now
             else:
                 data_now = np.sum(f_now["/entry/instrument/detector/data"][0, :, roi[2]:roi[3]],axis=1)
+                frame_now=f_now["/entry/instrument/detector/data"][0,:,:]
+                raw_frames[i,:,:]=frame_now
                 data_now[(db_coord[0] - int(dbeam_cut_range / 2)):(db_coord[0] + int(dbeam_cut_range / 2))] = np.zeros_like(data_now[(db_coord[0] - int(dbeam_cut_range / 2)):(db_coord[0] + int(dbeam_cut_range / 2))])
                 data_insert = np.zeros_like(example_data)
                 for i1 in range(0, data_insert.shape[1], 1):
@@ -162,6 +168,9 @@ entry_1 = cxifile.create_group("entry_1")
 print("Saving data...")
 data_1 = entry_1.create_group("data_1")
 data=data_1.create_dataset("data",data=data_full[useframes])
+print("Saving raw frames...")
+data2=data_1.create_dataset("raw_frames",data=raw_frames)
+
 instrument_1=entry_1.create_group("instrument_1")
 detector_1=instrument_1.create_group("detector_1")
 
