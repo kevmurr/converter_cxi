@@ -9,6 +9,7 @@ import os
 import sys
 import h5py as h5
 import scipy.constants as sc
+import ini_maker
 #Additional parameters
 dbeam_cut_range=10
 roi_size=20
@@ -222,3 +223,10 @@ mask_maker=cxifile.create_group("mask_maker")
 mask_cxi_3=mask_maker.create_dataset("mask",data=mask)
 print("Done.")
 cxifile.close()
+print("Making ini files")
+ini_maker.mk_make_whitefield_ini(path="{0}{1}".format(savedir,scan_name))
+ini_maker.mk_make_speckle_gui_ini(path="{0}{1}".format(savedir,scan_name))
+ini_maker.mk_stitch_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
+ini_maker.mk_update_pixel_map(path="{0}{1}".format(savedir,scan_name),roi=roi)
+ini_maker.mk_zernike_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
+print("Done.")
