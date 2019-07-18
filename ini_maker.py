@@ -88,7 +88,7 @@ def mk_zernike_ini(path,roi):
         "remove_astigmatism" : "True",
     }
     zernike["zernike-advanced"] = {
-        "h5_group" : "update_pixel_map",
+        "h5_group" : "zernike",
         "y_pixel_size": "/entry_1/instrument_1/detector_1/y_pixel_size",
         "x_pixel_size": "/entry_1/instrument_1/detector_1/x_pixel_size",
         "distance" : "/entry_1/instrument_1/detector_1/distance",
