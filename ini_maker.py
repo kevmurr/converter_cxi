@@ -14,11 +14,11 @@ def mk_make_whitefield_ini(path):
 def mk_speckle_gui_ini(path):
     speckle_gui = configparser.ConfigParser()
     speckle_gui["speckle-gui"] = {
-        "data_paths" : "/entry_1/data_1/data",
-        "mask_paths" : "/mask_maker/mask",
-        "translation_paths" : "/entry_1/sample_3/geometry/translation",
-        "whitefield_paths" : "/make_whitefield/whitefield",
-        "good_frames_paths" : "/frame_selector/good_frames",
+        "data_paths" : "['/entry_1/data_1/data']",
+        "mask_paths" : "['/mask_maker/mask', 'entry_1/instrument_1/detector_1/mask']",
+        "translation_paths" : "['/pos_refine/translation', '/entry_1/sample_3/geometry/translation']",
+        "whitefield_paths" : "['/make_whitefield/whitefield', '/process_3/whitefield']",
+        "good_frames_paths" : "['/frame_selector/good_frames', '/process_3/good_frames']"
     }
     with open('{0}/speckle-gui.ini'.format(path), 'w') as speckle_gui_file:
         speckle_gui.write(speckle_gui_file)
@@ -98,6 +98,4 @@ def mk_zernike_ini(path,roi):
     }
     with open('{0}/zernike.ini'.format(path), 'w') as zern_file:
         zernike.write(zern_file)
-
-
 
