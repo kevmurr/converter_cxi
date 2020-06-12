@@ -11,83 +11,94 @@ import h5py as h5
 import scipy.constants as sc
 import ini_maker
 #Additional parameters
-dbeam_cut_range=10
-roi_size=20
-year="2019"
-manual_db=None
+dbeam_cut_range = 0
+roi_size = 60
+year = "2020"
+manual_db = (370, 825) #None
+manual_orientation = "h" #Is used in case if the scan motor differs from SAMX or SAMY
 
 #input arguments
-scanno=int(input("Please enter the scan number (e.g. 10):"))
-targetnam=str(input("Please enter the target (Mo, Cu or Rh):"))
-detector_dist=float(input("Please enter the detector distance in meters(e.g. 0.3):"))
+scanno = int(input("Please enter the scan number (e.g. 10):"))
+targetnam = str(input("Please enter the target (Mo, Cu or Rh):"))
+detector_dist = float(input("Please enter the detector distance in meters(e.g. 0.3):"))
 print("All arguments are set.")
 
 #Process input arguments
 target_dict={
-"Mo": 17.48,
-"Cu": 8,
-"Rh": 20.2,
-}
-energy=target_dict[targetnam]*1000*sc.e
-scan_name="Scan_{}".format(scanno)
+    "Mo": 17.48,
+    "Cu": 8.,
+    "Rh": 20.2}
+energy = target_dict[targetnam] * 1e3 * sc.e
+scan_name = "Scan_{}".format(scanno)
 
 #Paths
 
 logdir = "/gpfs/cfel/cxi/labs/MLL-Sigray/scan-logs/"
-#logdir="Log/"
 scanssdir = "/gpfs/cfel/cxi/labs/MLL-Sigray/scan-frames/"
-#scanssdir="Data/"
-#savedir="output/"
 savedir= "/gpfs/cfel/cxi/labs/MLL-Sigray/Processed/{0}/".format(year)
 mask="/gpfs/cfel/cxi/labs/MLL-Sigray/mask/lambda_mask1.h5"
-#mask="lambda_mask1.h5"
 
 maskpath="/data"
 
 #Old permanent config things
-pxsize_x=55*10**-6
-pxsize_y=55*10**-6
-pxsize_z=0
-unit_scanmotor=10**-3
-unitvector_f=np.array((-1,0,0))
-unitvector_s=np.array((0,-1,0))
-db_coord=manual_db
+pxsize_x = 55*10**-6
+pxsize_y = 55*10**-6
+pxsize_z = 0
+unit_scanmotor = 10**-3
+unitvector_f = np.array([-1, 0, 0])
+unitvector_s = np.array([0, -1, 0])
+db_coord = manual_db
 
-unit_dict={
-" m\n":1,
-"mm\n":10**-3,
-"µm\n":10**-6,
-"nm\n":10**-9,
-"pm\n":10**-12,
-}
+def bld_basis(whole_data,useframes):
+    basis_vectors=np.zeros((whole_data.shape[0],2,3))
+    pixel_vector=np.array((pxsize_x,pxsize_y,pxsize_z))
+    for i in range(0,whole_data.shape[0],1):
+        basis_vectors[i,0,:]=np.multiply(unitvector_f,pixel_vector)
+        basis_vectors[i,1,:]=np.multiply(unitvector_s,pixel_vector)
+    return(basis_vectors[useframes,:,:])
 
+unit_dict = {
+    "m":1.,
+    "mm":10**-3,
+    "µm":10**-6,
+    "nm":10**-9,
+    "pm":10**-12}
 
 #Load mask
-maskfile=h5.File(mask,"r")
-mask=maskfile[maskpath][()].astype(np.int)
+maskfile = h5.File(mask,"r")
+mask = maskfile[maskpath][()].astype(np.int)
 
 #Load log and read tings
-lognam="{0}{1}.log".format(logdir,scan_name)
-logfile=open(lognam,"r")
-scanmotor=None
-i=0
+lognam = "{0}{1}.log".format(logdir,scan_name)
+logfile = open(lognam,"r")
+scanmotor = None
+i = 0
 for line in logfile:
     if line.startswith("# Points count"):
         N_points=int(line.split(":")[1])
         positions = np.zeros((N_points)).astype("float")
-    if line.startswith("# Device:") and line.endswith("Scanner")==False and line.endswith("Lambda\n")==False:
+    if line.startswith("# Device:") and not line.endswith("Scanner") and not line.endswith("Lambda\n"):
         scanmotor=str(line.split(":")[1][1:])
-    if line.startswith("#")==False:
-        current_entry=line.split(";")[2]
-        if i==0:
-            unit=current_entry[-3:]
-            print(unit)
-        unit_scaling=float(unit_dict[unit])
-        current_pos=float(current_entry[:-3])*unit_scaling
-        positions[i]=current_pos
-        i+=1
+    if not line.startswith("#"):
+        current_entry = line.split(";")[2]
+        if i == 0:
+            #unit = current_entry[-3:].strip()
+            unit = current_entry.split(" ")[1]
+            print("The unit is",unit)
+        try:
+            unit_scaling = float(unit_dict[unit])
+        except KeyError:
+            if unit.startswith("n"):
+                unit_scaling = 1E-9
+            else:
+                unit_scaling = 1.0
+        current_pos = float(current_entry.split(" ")[0])*unit_scaling
+        positions[i] = current_pos
+        i += 1
+print("The scaling is ", unit_scaling)
 if scanmotor==None:
     print("WARNING: No proper scanmotor detected!")
+    orientation=manual_orientation
 else:
     print("Scanmotor is {}".format(scanmotor))
 
@@ -161,6 +172,18 @@ for i in range(0,N_points):
         print("Didnt find file {} or proper data in file.".format(file_now))
         useframes[i]=False
 
+#Make Ptychogram
+if orientation=="h":
+    ptychogram=np.zeros((data_full.shape[0],data_full.shape[2]))
+    midy=int(data_full.shape[1]/2)
+    for i in range(0,ptychogram.shape[0],1):
+        ptychogram[i,:]=data_full[i,midy,:]
+else:
+    ptychogram = np.zeros((data_full.shape[0], data_full.shape[1]))
+    midx=int(data_full.shape[2]/2)
+    for i in range(0,ptychogram.shape[0],1):
+        ptychogram[i,:]=data_full[i,:,midx]
+
 #writing the cxifile
 if os.path.isdir(savedir+scan_name)==False:
     os.mkdir(savedir+scan_name)
@@ -171,17 +194,12 @@ data_1 = entry_1.create_group("data_1")
 data=data_1.create_dataset("data",data=data_full[useframes])
 print("Saving raw frames...")
 data2=data_1.create_dataset("raw_frames",data=raw_frames)
+ptychogram_data=data_1.create_dataset("ptychogram",data=ptychogram)
 
 instrument_1=entry_1.create_group("instrument_1")
 detector_1=instrument_1.create_group("detector_1")
 
-def bld_basis(whole_data,useframes=useframes):
-    basis_vectors=np.zeros((whole_data.shape[0],2,3))
-    pixel_vector=np.array((pxsize_x,pxsize_y,pxsize_z))
-    for i in range(0,whole_data.shape[0],1):
-        basis_vectors[i,0,:]=np.multiply(unitvector_f,pixel_vector)
-        basis_vectors[i,1,:]=np.multiply(unitvector_s,pixel_vector)
-    return(basis_vectors[useframes,:,:])
+
 
 basis_vectors_cxi=detector_1.create_dataset("basis_vectors",data=bld_basis(whole_data=data_full,useframes=useframes))
 detector_distance_cxi=detector_1.create_dataset("distance",data=float(detector_dist))
@@ -189,6 +207,7 @@ print("Energy is %s J"%energy)
 print("Making wavelength")
 wavelength=(sc.h*sc.c)/energy
 print("Wavelength is %s m" %wavelength)
+
 
 
 translation_vec=np.zeros((N_points,3))
@@ -224,9 +243,16 @@ mask_cxi_3=mask_maker.create_dataset("mask",data=mask)
 print("Done.")
 cxifile.close()
 print("Making ini files")
+x = np.ones((5,5))
+print("Original array:")
+print(x)
+print("1 on the border and 0 inside in the array")
+x[1:-1,1:-1] = 0
+print(x)
 ini_maker.mk_make_whitefield_ini(path="{0}{1}".format(savedir,scan_name))
 ini_maker.mk_speckle_gui_ini(path="{0}{1}".format(savedir,scan_name))
 ini_maker.mk_stitch_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
 ini_maker.mk_update_pixel_map_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
 ini_maker.mk_zernike_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
 print("Done.")
+
