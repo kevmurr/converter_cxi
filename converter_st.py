@@ -10,15 +10,15 @@ import sys
 import h5py as h5
 import scipy.constants as sc
 import ini_maker
+from scipy.ndimage import median_filter
 #Additional parameters
-dbeam_cut_range = 0
 roi_size = 60
 year = "2020"
-manual_db = (370, 825) #None
+manual_db = None # (378, 825) #None 370
 manual_orientation = "h" #Is used in case if the scan motor differs from SAMX or SAMY
 
 #input arguments
-scanno = int(input("Please enter the scan number (e.g. 10):"))
+scanno = int(input("Please enter the scan number (e.g. 10) or e.g. -1 for the last scan:"))
 targetnam = str(input("Please enter the target (Mo, Cu or Rh):"))
 detector_dist = float(input("Please enter the detector distance in meters(e.g. 0.3):"))
 print("All arguments are set.")
@@ -29,7 +29,7 @@ target_dict={
     "Cu": 8.,
     "Rh": 20.2}
 energy = target_dict[targetnam] * 1e3 * sc.e
-scan_name = "Scan_{}".format(scanno)
+
 
 #Paths
 
@@ -69,6 +69,14 @@ maskfile = h5.File(mask,"r")
 mask = maskfile[maskpath][()].astype(np.int)
 
 #Load log and read tings
+if scanno<0:
+    list_lognams=sorted(os.listdir(logdir))
+    list_lognams_scans=[i for i in list_lognams if i.startswith('Scan_')]
+    scanno_use=int(list_lognams_scans[scanno].split("_")[1].split(".")[0])
+    print("Detected scan number:",scanno_use)
+    scanno=scanno_use
+
+scan_name = "Scan_{}".format(scanno)
 lognam = "{0}{1}.log".format(logdir,scan_name)
 logfile = open(lognam,"r")
 scanmotor = None
@@ -125,8 +133,8 @@ print("Detected {} files.".format(len(files)))
 if N_points!=len(files):
     print("WARNING! Number of expected files does not match number of detected files.")
 useframes=np.ones((N_points)).astype(np.bool)
-startframe=0
 frames_arr=np.arange(0,N_points,1)
+startframe=0
 for i in range(0,N_points):
     try:
         if i==startframe:
@@ -134,38 +142,30 @@ for i in range(0,N_points):
             example_f=h5.File(ldir+"/"+file_now,"r")
             example_data=example_f["/entry/instrument/detector/data"][0,:,:]
             print(np.sum(example_data))
-            if np.sum(example_data)<10:
-                startframe+=1
-                print("First frame was only zeros")
-                useframes[i]=False
-            else:
-                if db_coord==None:
-                    db_coord=np.unravel_index(np.argmax(np.multiply(mask,example_data)),example_data.shape)
-                print("Direct beam pixel coordinate is {0}.".format(db_coord))
-                roi=(db_coord[0]-int(roi_size/2),db_coord[0]+int(roi_size/2),db_coord[1]-int(roi_size/2),db_coord[1]+int(roi_size/2))
-                print("Startframe is {0}. Creating full data array.".format(i))
-                data_full=np.zeros((N_points,example_data.shape[0],example_data.shape[1]))
-                raw_frames=np.zeros_like(data_full)
-        else:
-            file_now = "/{0}_".format(scan_name) + "{:05.0f}_Lambda.nxs".format(i)
-            f_now=h5.File(ldir+"/"+file_now,"r")
+            if db_coord==None:
+                db_coord=np.unravel_index(np.argmax(np.multiply(mask,median_filter(example_data,size=10))),example_data.shape)
+            print("Direct beam pixel coordinate is {0}.".format(db_coord))
+            roi=(db_coord[0]-int(roi_size/2),db_coord[0]+int(roi_size/2),db_coord[1]-int(roi_size/2),db_coord[1]+int(roi_size/2))
+            print("Startframe is {0}. Creating full data array.".format(i))
             if orientation=="h":
-                data_now=np.sum(f_now["/entry/instrument/detector/data"][0,roi[0]:roi[1],:],axis=0)
-                frame_now=f_now["/entry/instrument/detector/data"][0,:,:]
-                raw_frames[i,:,:]=frame_now
-                data_now[(db_coord[1]-int(dbeam_cut_range/2)):(db_coord[1]+int(dbeam_cut_range/2))]=np.zeros_like(data_now[(db_coord[1]-int(dbeam_cut_range/2)):(db_coord[1]+int(dbeam_cut_range/2))])
-                data_insert = np.zeros_like(example_data)
-                for i1 in range(0,data_insert.shape[0],1):
-                    data_insert[i1,:]=data_now
+                data_full=np.zeros((N_points,1,example_data.shape[1]))
             else:
-                data_now = np.sum(f_now["/entry/instrument/detector/data"][0, :, roi[2]:roi[3]],axis=1)
-                frame_now=f_now["/entry/instrument/detector/data"][0,:,:]
-                raw_frames[i,:,:]=frame_now
-                data_now[(db_coord[0] - int(dbeam_cut_range / 2)):(db_coord[0] + int(dbeam_cut_range / 2))] = np.zeros_like(data_now[(db_coord[0] - int(dbeam_cut_range / 2)):(db_coord[0] + int(dbeam_cut_range / 2))])
-                data_insert = np.zeros_like(example_data)
-                for i1 in range(0, data_insert.shape[1], 1):
-                    data_insert[:, i1] = data_now
-            data_full[i,:,:]=data_insert
+                data_full = np.zeros((N_points, example_data.shape[0], 1))
+            raw_frames=np.zeros((data_full.shape[0],example_data.shape[0],example_data.shape[1]))
+        file_now = "/{0}_".format(scan_name) + "{:05.0f}_Lambda.nxs".format(i)
+        f_now=h5.File(ldir+"/"+file_now,"r")
+        if orientation=="h":
+            data_now=np.sum(f_now["/entry/instrument/detector/data"][0,roi[0]:roi[1],:],axis=0)
+            frame_now=f_now["/entry/instrument/detector/data"][0,:,:]
+            raw_frames[i,:,:]=frame_now
+            data_insert = data_now
+            data_full[i, 0, :] = data_insert
+        else:
+            data_now = np.sum(f_now["/entry/instrument/detector/data"][0, :, roi[2]:roi[3]],axis=1)
+            frame_now=f_now["/entry/instrument/detector/data"][0,:,:]
+            raw_frames[i,:,:]=frame_now
+            data_insert = data_now
+            data_full[i, :, 0] = data_insert
     except (KeyError,OSError):
         if i==startframe:
             startframe+=1
@@ -229,17 +229,19 @@ source_1=instrument_1.create_group("source_1")
 wavelength_cxi=source_1.create_dataset("wavelength",data=wavelength)
 db_coordinate=source_1.create_dataset("direct_beam_coordinate",data=db_coord)
 energy_cxi=source_1.create_dataset("energy",data=energy)
-sample_2=entry_1.create_group("sample_2")
-sample_3=entry_1.create_group("sample_3")
-geometry=sample_3.create_group("geometry")
+sample_1=entry_1.create_group("sample_1")
+geometry=sample_1.create_group("geometry")
 translation=geometry.create_dataset("translation",data=translation_vec)
 make_whitefield=cxifile.create_group("make_whitefield")
 whitefield=make_whitefield.create_dataset("whitefield",data=powderarr)
 frame_selector=cxifile.create_group("frame_selector")
 good_frames=frame_selector.create_dataset("good_frames",data=good_frames_arr)
-mask=mask.astype("bool")
+if orientation=="h":
+    mask_save=np.ones((1,data_full.shape[2])).astype("bool")
+else:
+    mask_save = np.ones((data_full.shape[1],1)).astype("bool")
 mask_maker=cxifile.create_group("mask_maker")
-mask_cxi_3=mask_maker.create_dataset("mask",data=mask)
+mask_cxi_3=mask_maker.create_dataset("mask",data=mask_save)
 print("Done.")
 cxifile.close()
 print("Making ini files")
