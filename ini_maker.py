@@ -1,9 +1,10 @@
 import configparser
+
 def mk_make_whitefield_ini(path):
     make_whitefield = configparser.ConfigParser()
     make_whitefield["make_whitefield"] = {
         "frames" : "/entry_1/data_1/data ;str, location of diffraction data",
-        "sigma_t" : "10 ;None, or int, number of adjascent frames to average (None disables)",
+        "sigma_t" : "10 ;None, or int, number of adjacent frames to average (None disables)",
     }
     make_whitefield["make_whitefield-advanced"] = {
         "h5_group" : "make_whitefield ;str, name of h5 group to write to",
@@ -23,7 +24,7 @@ def mk_speckle_gui_ini(path):
     with open('{0}/speckle-gui.ini'.format(path), 'w') as speckle_gui_file:
         speckle_gui.write(speckle_gui_file)
 
-def mk_stitch_ini(path,roi):
+def mk_stitch_ini(path, roi):
     stitch = configparser.ConfigParser()
     stitch["stitch"] = {
         "roi" : "{0} ;tuple of length 4, (ss_start, ss_end, fs_start, fs_end)".format(roi),
@@ -48,7 +49,7 @@ def mk_stitch_ini(path,roi):
     with open('{0}/stitch.ini'.format(path), 'w') as stitch_file:
         stitch.write(stitch_file)
 
-def mk_update_pixel_map_ini(path,roi):
+def mk_update_pixel_map_ini(path, roi):
     update_pixel_map = configparser.ConfigParser()
     update_pixel_map["update_pixel_map"] = {
         "roi" : "{0}".format(roi),
@@ -74,7 +75,7 @@ def mk_update_pixel_map_ini(path,roi):
     with open('{0}/update_pixel_map.ini'.format(path), 'w') as upm_file:
         update_pixel_map.write(upm_file)
 
-def mk_zernike_ini(path,roi):
+def mk_zernike_ini(path, roi):
     zernike = configparser.ConfigParser()
     zernike["zernike"] = {
         "roi" : "{0}".format(roi),
@@ -98,4 +99,3 @@ def mk_zernike_ini(path,roi):
     }
     with open('{0}/zernike.ini'.format(path), 'w') as zern_file:
         zernike.write(zern_file)
-
