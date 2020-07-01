@@ -12,12 +12,12 @@ import scipy.constants as sc
 import ini_maker
 from scipy.ndimage import median_filter
 #Additional parameters
-extrude=True #Set if data should be extruded according to old ST software
+extrude=False #Set if data should be extruded according to old ST software
 roi_size = 60
 year = "2020"
 manual_db = None # (378, 825) #None 370
 manual_orientation = "h" #Is used in case if the scan motor differs from SAMX or SAMY
-
+force_manual_orientation=True
 #input arguments
 scanno = int(input("Please enter the scan number (e.g. 10) or e.g. -1 for the last scan:"))
 targetnam = str(input("Please enter the target (Mo, Cu or Rh):"))
@@ -141,7 +141,8 @@ else:
     print("Scanmotor is not X-SAM or Y-SAM. Don't know orientation. Assuming h.")
     orientation="h"
 
-
+if force_manual_orientation==True:
+    orientation=manual_orientation
 
 
 #Loading the data
