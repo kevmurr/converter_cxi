@@ -17,7 +17,7 @@ roi_size = 60
 year = "2020"
 manual_db = None # (378, 825) #None 370
 manual_orientation = "h" #Is used in case if the scan motor differs from SAMX or SAMY
-force_manual_orientation=True
+force_manual_orientation = False
 #input arguments
 scanno = int(input("Please enter the scan number (e.g. 10) or e.g. -1 for the last scan:"))
 targetnam = str(input("Please enter the target (Mo, Cu or Rh):"))
@@ -141,9 +141,9 @@ else:
     print("Scanmotor is not X-SAM or Y-SAM. Don't know orientation. Assuming h.")
     orientation="h"
 
+
 if force_manual_orientation==True:
     orientation=manual_orientation
-
 
 #Loading the data
 ldir=scanssdir+scan_name
@@ -230,29 +230,41 @@ else:
 if os.path.isdir(savedir+scan_name)==False:
     os.mkdir(savedir+scan_name)
 cxifile=h5.File("{0}{1}/{1}.cxi".format(savedir,scan_name),"w")
+framesfile=h5.File("Frames_{0}{1}/{1}.cxi".format(savedir,scan_name),"w")
+
 entry_1 = cxifile.create_group("entry_1")
+entry_1f = framesfile.create_group("entry_1")
 print("Saving data...")
 data_1 = entry_1.create_group("data_1")
+data_1f = entry_1f.create_group("data_1")
 data=data_1.create_dataset("data",data=data_full[useframes])
 print("Data shape",data_full[useframes].shape)
 print("Saving raw frames...")
-data2=data_1.create_dataset("raw_frames",data=raw_frames[useframes])
+
+data2=data_1f.create_dataset("raw_frames",data=raw_frames[useframes])
 print("Raw frames shape",data2.shape)
 ptychogram_data=data_1.create_dataset("ptychogram",data=ptychogram)
+ptychogram_dataf=data_1f.create_dataset("ptychogram",data=ptychogram)
 
 instrument_1=entry_1.create_group("instrument_1")
+instrument_1f=entry_1f.create_group("instrument_1")
+
 detector_1=instrument_1.create_group("detector_1")
+detector_1f=instrument_1f.create_group("detector_1")
 
 
 
 basis_vectors_cxi=detector_1.create_dataset("basis_vectors",data=bld_basis(whole_data=data_full,useframes=useframes))
+basis_vectors_cxif=detector_1f.create_dataset("basis_vectors",data=bld_basis(whole_data=data_full,useframes=useframes))
+
 detector_distance_cxi=detector_1.create_dataset("distance",data=float(detector_dist))
+detector_distance_cxif=detector_1f.create_dataset("distance",data=float(detector_dist))
+
 print("Energy is %s J"%energy)
 print("Making wavelength")
+
 wavelength=(sc.h*sc.c)/energy
 print("Wavelength is %s m" %wavelength)
-
-
 
 translation_vec=np.zeros((N_points,3))
 if orientation=="v":
@@ -268,22 +280,50 @@ powderarr=np.sum(data_full[useframes],axis=0)
 print("whitefield shape", powderarr.shape)
 print("Making good frames array...")
 good_frames_arr=np.arange(0,translation_vec.shape[0],1)
+
 x_pixel_cxi=detector_1.create_dataset("x_pixel_size",data=pxsize_x)
 y_pixel_cxi=detector_1.create_dataset("y_pixel_size",data=pxsize_y)
+
+x_pixel_cxif=detector_1f.create_dataset("x_pixel_size",data=pxsize_x)
+y_pixel_cxif=detector_1f.create_dataset("y_pixel_size",data=pxsize_y)
+
 source_1=instrument_1.create_group("source_1")
+source_1f=instrument_1f.create_group("source_1")
+
 wavelength_cxi=source_1.create_dataset("wavelength",data=wavelength)
+wavelength_cxif=source_1f.create_dataset("wavelength",data=wavelength)
+
+
 db_coordinate=source_1.create_dataset("direct_beam_coordinate",data=db_coord)
+db_coordinatef=source_1f.create_dataset("direct_beam_coordinate",data=db_coord)
+
 energy_cxi=source_1.create_dataset("energy",data=energy)
+energy_cxif=source_1f.create_dataset("energy",data=energy)
+
 if extrude==True:
     sample_1=entry_1.create_group("sample_3")
+    sample_1f = entry_1f.create_group("sample_3")
 else:
     sample_1 = entry_1.create_group("sample_1")
+    sample_1f = entry_1f.create_group("sample_1")
+
 geometry=sample_1.create_group("geometry")
+geometryf=sample_1f.create_group("geometry")
+
 translation=geometry.create_dataset("translation",data=translation_vec)
+translationf=geometryf.create_dataset("translation",data=translation_vec)
+
 make_whitefield=cxifile.create_group("make_whitefield")
+make_whitefieldf=framesfile.create_group("make_whitefield")
+
 whitefield=make_whitefield.create_dataset("whitefield",data=powderarr)
+whitefieldf=make_whitefieldf.create_dataset("whitefield",data=powderarr)
+
 frame_selector=cxifile.create_group("frame_selector")
+frame_selectorf=framesfile.create_group("frame_selector")
 good_frames=frame_selector.create_dataset("good_frames",data=good_frames_arr)
+good_framesf=frame_selectorf.create_dataset("good_frames",data=good_frames_arr)
+
 if extrude==True:
     mask_save = np.ones((data_full.shape[1], data_full.shape[2])).astype("bool")
 else:
@@ -291,15 +331,22 @@ else:
         mask_save=np.ones((1,data_full.shape[2])).astype("bool")
     else:
         mask_save = np.ones((data_full.shape[1],1)).astype("bool")
+
 mask_maker=cxifile.create_group("mask_maker")
+mask_makerf=framesfile.create_group("mask_maker")
 mask_cxi_3=mask_maker.create_dataset("mask",data=mask_save)
+mask_cxi_3f=mask_makerf.create_dataset("mask",data=mask_save)
+
 print("Done.")
 cxifile.close()
-print("Making ini files")
-ini_maker.mk_make_whitefield_ini(path="{0}{1}".format(savedir,scan_name))
-ini_maker.mk_speckle_gui_ini(path="{0}{1}".format(savedir,scan_name))
-ini_maker.mk_stitch_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
-ini_maker.mk_update_pixel_map_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
-ini_maker.mk_zernike_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
+framesfile.close()
+
+if scanno>1002:
+    print("Making ini files")
+    ini_maker.mk_make_whitefield_ini(path="{0}{1}".format(savedir,scan_name))
+    ini_maker.mk_speckle_gui_ini(path="{0}{1}".format(savedir,scan_name))
+    ini_maker.mk_stitch_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
+    ini_maker.mk_update_pixel_map_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
+    ini_maker.mk_zernike_ini(path="{0}{1}".format(savedir,scan_name),roi=roi)
 print("Done.")
 
