@@ -84,48 +84,58 @@ scanmotor = None
 i = 0
 if scanno>1002:
     for line in logfile:
-        if line.startswith("# Points count"):
-            N_points=int(line.split(":")[1])
-            positions = np.zeros((N_points)).astype("float")
-        if line.startswith("# Device:") and not line.endswith("Scanner") and not line.endswith("Lambda\n"):
-            scanmotor=str(line.split(":")[1][1:])
-        if line.startswith("# Start point:"):
-            unit=line.split(" ")[-1]
-            try:
-                unit_scaling = float(unit_dict[unit])
-            except KeyError:
-                if unit.startswith("n"):
-                    unit_scaling = 1E-9
-                else:
-                    unit_scaling = 1.0
-        if not line.startswith("#"):
-            current_entry = line.split(";")[2]
-            current_pos = float(current_entry.split(" ")[0])*unit_scaling
-            positions[i] = current_pos
-            i += 1
+        try:
+            if line.startswith("# Points count"):
+                N_points=int(line.split(":")[1])
+                useframes = np.ones((N_points)).astype(np.bool)
+                positions = np.zeros((N_points)).astype("float")
+            if line.startswith("# Device:") and not line.endswith("Scanner") and not line.endswith("Lambda\n"):
+                scanmotor=str(line.split(":")[1][1:])
+            if line.startswith("# Start point:"):
+                unit=line.split(" ")[-1]
+                try:
+                    unit_scaling = float(unit_dict[unit])
+                except KeyError:
+                    if unit.startswith("n"):
+                        unit_scaling = 1E-9
+                    else:
+                        unit_scaling = 1.0
+            if not line.startswith("#"):
+                current_entry = line.split(";")[2]
+                current_pos = float(current_entry.split(" ")[0])*unit_scaling
+                positions[i] = current_pos
+                i += 1
+        except IndexError:
+            useframes[i] = False
+            i +=1
 else:
     for line in logfile:
-        if line.startswith("# Points count"):
-            N_points=int(line.split(":")[1])
-            positions = np.zeros((N_points)).astype("float")
-        if line.startswith("# Device:") and not line.endswith("Scanner") and not line.endswith("Lambda\n"):
-            scanmotor=str(line.split(":")[1][1:])
-        if not line.startswith("#"):
-            current_entry = line.split(";")[2]
-            if i == 0:
-                #unit = current_entry[-3:].strip()
-                unit = current_entry.split(" ")[1]
-                print("The unit is",unit)
-            try:
-                unit_scaling = float(unit_dict[unit])
-            except KeyError:
-                if unit.startswith("n"):
-                    unit_scaling = 1E-9
-                else:
-                    unit_scaling = 1.0
-            current_pos = float(current_entry.split(" ")[0])*unit_scaling
-            positions[i] = current_pos
-            i += 1
+        try:
+            if line.startswith("# Points count"):
+                N_points=int(line.split(":")[1])
+                useframes = np.ones((N_points)).astype(np.bool)
+                positions = np.zeros((N_points)).astype("float")
+            if line.startswith("# Device:") and not line.endswith("Scanner") and not line.endswith("Lambda\n"):
+                scanmotor=str(line.split(":")[1][1:])
+            if not line.startswith("#"):
+                current_entry = line.split(";")[2]
+                if i == 0:
+                    #unit = current_entry[-3:].strip()
+                    unit = current_entry.split(" ")[1]
+                    print("The unit is",unit)
+                try:
+                    unit_scaling = float(unit_dict[unit])
+                except KeyError:
+                    if unit.startswith("n"):
+                        unit_scaling = 1E-9
+                    else:
+                        unit_scaling = 1.0
+                current_pos = float(current_entry.split(" ")[0])*unit_scaling
+                positions[i] = current_pos
+                i += 1
+        except IndexError:
+            useframes[i] = False
+            i +=1
 print("The scaling is ", unit_scaling)
 if scanmotor==None:
     print("WARNING: No proper scanmotor detected!")
@@ -156,7 +166,7 @@ files.sort()
 print("Detected {} files.".format(len(files)))
 if N_points!=len(files):
     print("WARNING! Number of expected files does not match number of detected files.")
-useframes=np.ones((N_points)).astype(np.bool)
+
 frames_arr=np.arange(0,N_points,1)
 startframe=0
 for i in range(0,N_points):
@@ -230,7 +240,7 @@ else:
 if os.path.isdir(savedir+scan_name)==False:
     os.mkdir(savedir+scan_name)
 cxifile=h5.File("{0}{1}/{1}.cxi".format(savedir,scan_name),"w")
-framesfile=h5.File("Frames_{0}{1}/{1}.cxi".format(savedir,scan_name),"w")
+framesfile=h5.File("{0}{1}/Frames_{1}.cxi".format(savedir,scan_name),"w")
 
 entry_1 = cxifile.create_group("entry_1")
 entry_1f = framesfile.create_group("entry_1")
@@ -241,9 +251,9 @@ data=data_1.create_dataset("data",data=data_full[useframes])
 print("Data shape",data_full[useframes].shape)
 print("Saving raw frames...")
 
-data2=data_1f.create_dataset("raw_frames",data=raw_frames[useframes])
+data2=data_1f.create_dataset("data",data=raw_frames[useframes])
 print("Raw frames shape",data2.shape)
-ptychogram_data=data_1.create_dataset("ptychogram",data=ptychogram)
+#ptychogram_data=data_1.create_dataset("ptychogram",data=ptychogram)
 ptychogram_dataf=data_1f.create_dataset("ptychogram",data=ptychogram)
 
 instrument_1=entry_1.create_group("instrument_1")
@@ -314,15 +324,15 @@ translation=geometry.create_dataset("translation",data=translation_vec)
 translationf=geometryf.create_dataset("translation",data=translation_vec)
 
 make_whitefield=cxifile.create_group("make_whitefield")
-make_whitefieldf=framesfile.create_group("make_whitefield")
+#make_whitefieldf=framesfile.create_group("make_whitefield")
 
 whitefield=make_whitefield.create_dataset("whitefield",data=powderarr)
-whitefieldf=make_whitefieldf.create_dataset("whitefield",data=powderarr)
+#whitefieldf=make_whitefieldf.create_dataset("whitefield",data=powderarr)
 
 frame_selector=cxifile.create_group("frame_selector")
-frame_selectorf=framesfile.create_group("frame_selector")
+#frame_selectorf=framesfile.create_group("frame_selector")
 good_frames=frame_selector.create_dataset("good_frames",data=good_frames_arr)
-good_framesf=frame_selectorf.create_dataset("good_frames",data=good_frames_arr)
+#good_framesf=frame_selectorf.create_dataset("good_frames",data=good_frames_arr)
 
 if extrude==True:
     mask_save = np.ones((data_full.shape[1], data_full.shape[2])).astype("bool")
@@ -333,15 +343,15 @@ else:
         mask_save = np.ones((data_full.shape[1],1)).astype("bool")
 
 mask_maker=cxifile.create_group("mask_maker")
-mask_makerf=framesfile.create_group("mask_maker")
+#mask_makerf=framesfile.create_group("mask_maker")
 mask_cxi_3=mask_maker.create_dataset("mask",data=mask_save)
-mask_cxi_3f=mask_makerf.create_dataset("mask",data=mask_save)
+#mask_cxi_3f=mask_makerf.create_dataset("mask",data=mask_save)
 
 print("Done.")
 cxifile.close()
 framesfile.close()
 
-if scanno>1002:
+if scanno<1002:
     print("Making ini files")
     ini_maker.mk_make_whitefield_ini(path="{0}{1}".format(savedir,scan_name))
     ini_maker.mk_speckle_gui_ini(path="{0}{1}".format(savedir,scan_name))
